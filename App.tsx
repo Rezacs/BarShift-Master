@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Layout from './components/Layout';
 import StaffList from './components/StaffList';
 import RequirementsGrid from './components/RequirementsGrid';
@@ -8,15 +8,49 @@ import { Worker, DayOfWeek, StaffingRequirement, ScheduleEntry } from './types';
 import { DAYS, HOURS } from './constants';
 import { GeminiScheduler } from './services/geminiService';
 
+const STORAGE_KEY = 'bar_shift_master_storage_v1';
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('workers');
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [requirements, setRequirements] = useState<StaffingRequirement[]>([]);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  // Initialize requirements
+  // Initialize and Load Data
   useEffect(() => {
+    const savedData = localStorage.getItem(STORAGE_KEY);
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        if (parsed.workers) setWorkers(parsed.workers);
+        if (parsed.requirements) setRequirements(parsed.requirements);
+        if (parsed.schedule) setSchedule(parsed.schedule);
+        setLastSaved(new Date());
+      } catch (e) {
+        console.error("Failed to load saved data", e);
+        initializeRequirements();
+      }
+    } else {
+      initializeRequirements();
+    }
+  }, []);
+
+  // Save Data on changes
+  useEffect(() => {
+    if (requirements.length > 0) {
+      const dataToSave = {
+        workers,
+        requirements,
+        schedule
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+      setLastSaved(new Date());
+    }
+  }, [workers, requirements, schedule]);
+
+  const initializeRequirements = () => {
     const initialReqs: StaffingRequirement[] = [];
     DAYS.forEach(day => {
       HOURS.forEach(hour => {
@@ -24,7 +58,7 @@ const App: React.FC = () => {
       });
     });
     setRequirements(initialReqs);
-  }, []);
+  };
 
   const handleAddWorker = (worker: Worker) => {
     setWorkers(prev => [...prev, worker]);
@@ -32,6 +66,9 @@ const App: React.FC = () => {
 
   const handleRemoveWorker = (id: string) => {
     setWorkers(prev => prev.filter(w => w.id !== id));
+    // When removing a worker, we should also clean up the requirements if they exceed the new total
+    // But the RequirementsGrid handles the cap visually/interactively. 
+    // We do clean the schedule though.
     setSchedule(prev => prev.filter(s => s.workerId !== id));
   };
 
@@ -39,6 +76,16 @@ const App: React.FC = () => {
     setRequirements(prev => prev.map(r => 
       (r.day === day && r.hour === hour) ? { ...r, neededCount: count } : r
     ));
+  };
+
+  const handleReset = () => {
+    if (window.confirm("Are you sure you want to clear all data? This will remove all workers and reset requirements.")) {
+      localStorage.removeItem(STORAGE_KEY);
+      setWorkers([]);
+      setSchedule([]);
+      initializeRequirements();
+      setActiveTab('workers');
+    }
   };
 
   const generateSchedule = async () => {
@@ -84,7 +131,12 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+    <Layout 
+      activeTab={activeTab} 
+      setActiveTab={setActiveTab} 
+      onReset={handleReset}
+      lastSaved={lastSaved}
+    >
       <div className="animate-in fade-in duration-500">
         {activeTab === 'workers' && (
           <StaffList 

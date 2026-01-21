@@ -5,9 +5,11 @@ interface LayoutProps {
   children: React.ReactNode;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  onReset?: () => void;
+  lastSaved?: Date | null;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, onReset, lastSaved }) => {
   const tabs = [
     { id: 'workers', label: 'Staff', icon: 'fa-users' },
     { id: 'requirements', label: 'Needs', icon: 'fa-clipboard-list' },
@@ -23,15 +25,23 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
             <div className="bg-amber-500 p-2 rounded-lg">
               <i className="fas fa-beer text-slate-900 text-xl"></i>
             </div>
-            <h1 className="text-xl font-bold tracking-tight">BarShift Master</h1>
+            <div className="hidden md:block">
+              <h1 className="text-xl font-bold tracking-tight">BarShift Master</h1>
+              {lastSaved && (
+                <p className="text-[10px] text-gray-400 font-medium">
+                  <i className="fas fa-cloud-upload-alt mr-1"></i>
+                  Last saved: {lastSaved.toLocaleTimeString()}
+                </p>
+              )}
+            </div>
           </div>
           
-          <nav className="flex space-x-1">
+          <nav className="flex items-center space-x-1">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'bg-amber-500 text-slate-900'
                     : 'text-gray-300 hover:bg-slate-800 hover:text-white'
@@ -41,6 +51,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                 <span className="hidden sm:inline">{tab.label}</span>
               </button>
             ))}
+            
+            {onReset && (
+              <div className="ml-2 pl-2 border-l border-slate-700">
+                <button
+                  onClick={onReset}
+                  className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+                  title="Reset All Data"
+                >
+                  <i className="fas fa-trash-alt"></i>
+                </button>
+              </div>
+            )}
           </nav>
         </div>
       </header>
@@ -54,11 +76,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center text-xs text-gray-500">
-          <p>&copy; 2024 BarShift Master - Smart Scheduling</p>
-          <div className="flex items-center space-x-1">
-            <span className="w-2 h-2 rounded-full bg-green-500"></span>
-            <span>Gemini AI Optimization Active</span>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center text-xs text-gray-500 space-y-2 sm:space-y-0">
+          <p>&copy; 2024 BarShift Master - Data persists in browser storage</p>
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-1">
+              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+              <span>Local Database Active</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <span className="w-2 h-2 rounded-full bg-green-500"></span>
+              <span>AI Optimized</span>
+            </div>
           </div>
         </div>
       </footer>
