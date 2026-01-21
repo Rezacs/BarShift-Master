@@ -1,0 +1,5 @@
+{
+  "name": "BarShift Master",
+  "description": "An intelligent staff scheduling application for bars. Define worker preferences and daily constraints, set hourly staffing requirements, and use AI to generate optimized schedules that balance staff needs with business demand.",
+  "requestFramePermissions": []
+}
