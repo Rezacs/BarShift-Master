@@ -1,39 +1,44 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Worker, StaffingRequirement, ScheduleEntry } from "../types";
+import { Worker, StaffingRequirement, ScheduleEntry, OperatingHours, DayOfWeek } from "../types";
 
 export class GeminiScheduler {
-  private ai: GoogleGenAI;
+  // Removed static ai instance to ensure fresh initialization with correct API key, adhering to SDK rules
 
-  constructor() {
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  }
+  async generateSchedule(
+    workers: Worker[], 
+    requirements: StaffingRequirement[], 
+    operatingHours: Record<DayOfWeek, OperatingHours>
+  ): Promise<ScheduleEntry[]> {
+    // Initializing GoogleGenAI inside the method to ensure it uses the most current API key environment variable
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  async generateSchedule(workers: Worker[], requirements: StaffingRequirement[]): Promise<ScheduleEntry[]> {
     const prompt = `
-      You are an expert workforce scheduler. Create an hourly staff schedule for a bar.
+      You are a workforce scheduling algorithm. Create a staff schedule for a hospitality venue.
       
-      BAR HOURS: 4 AM (4) to 8 PM (20).
+      OPERATING HOURS:
+      ${JSON.stringify(operatingHours, null, 2)}
       
       WORKERS:
       ${JSON.stringify(workers, null, 2)}
       
-      STAFFING REQUIREMENTS (How many people needed per hour per day):
+      STAFFING REQUIREMENTS:
       ${JSON.stringify(requirements, null, 2)}
       
-      SCHEDULING RULES (PRIORITY ORDER):
-      1. HARD CONSTRAINT: Workers MUST NOT work outside their "possibleStart" to "possibleEnd" range.
-      2. HARD CONSTRAINT: Staffing requirements MUST be met exactly if possible.
-      3. PREFERENCE: Try to assign workers to work their "preferredDaysCount" total days per week.
-      4. PREFERENCE: Try to keep shifts within "preferredStart" and "preferredEnd".
-      5. EFFICIENCY: Shifts should be contiguous (no split shifts).
-      6. BALANCE: Distribute evening/early shifts fairly.
+      SCHEDULING LOGIC:
+      1. HARD CONSTRAINT: NEVER schedule a worker when the venue is closed (see OPERATING HOURS).
+      2. HARD CONSTRAINT: Never schedule a worker on their "unavailableDays".
+      3. HARD CONSTRAINT: Never assign a worker outside their possibleStart/possibleEnd.
+      4. STAFFING: Match the neededCount for each hour exactly.
+      5. BACKUP: Workers with "isFlexible: true" should be assigned last.
+      6. CONTINUITY: Shifts should be continuous (one block per day).
       
-      Output a valid JSON array of ScheduleEntry objects.
+      OUTPUT: JSON array of ScheduleEntry objects: [{workerId: string, day: string, hour: number}, ...].
     `;
 
     try {
-      const response = await this.ai.models.generateContent({
+      const response = await ai.models.generateContent({
+        // Upgraded to gemini-3-pro-preview for handling the complex reasoning required for scheduling
         model: 'gemini-3-pro-preview',
         contents: prompt,
         config: {
@@ -49,14 +54,14 @@ export class GeminiScheduler {
               },
               required: ["workerId", "day", "hour"]
             }
-          },
-          thinkingConfig: { thinkingBudget: 24000 }
+          }
+          // Removed thinkingBudget constraint to allow the model to use its full reasoning potential for the task
         }
       });
 
+      // Directly accessing .text property as per extracting output guidelines
       const text = response.text;
-      const result = JSON.parse(text || '[]');
-      return result;
+      return JSON.parse(text || '[]');
     } catch (error) {
       console.error("Error generating schedule:", error);
       throw error;

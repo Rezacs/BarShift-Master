@@ -10,8 +10,8 @@ export enum DayOfWeek {
 }
 
 export interface DayConstraint {
-  maxHour?: number; // e.g., 17 (5 PM)
-  maxTotalHours?: number; // e.g., 8 hours total
+  maxHour?: number;
+  maxTotalHours?: number;
 }
 
 export interface Worker {
@@ -22,12 +22,15 @@ export interface Worker {
   preferredStart: number;
   preferredEnd: number;
   preferredDaysCount: number;
+  preferredDays: DayOfWeek[];
+  unavailableDays: DayOfWeek[];
+  isFlexible: boolean;
   constraints: Partial<Record<DayOfWeek, DayConstraint>>;
 }
 
 export interface StaffingRequirement {
   day: DayOfWeek;
-  hour: number; // 4-20
+  hour: number;
   neededCount: number;
 }
 
@@ -37,7 +40,18 @@ export interface ScheduleEntry {
   hour: number;
 }
 
-export interface ScheduleData {
+export interface OperatingHours {
+  open: number;
+  close: number;
+}
+
+export interface Bar {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  photoUrl: string;
+  operatingHours: Record<DayOfWeek, OperatingHours>;
   workers: Worker[];
   requirements: StaffingRequirement[];
   schedule: ScheduleEntry[];

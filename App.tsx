@@ -1,165 +1,159 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import StaffList from './components/StaffList';
 import RequirementsGrid from './components/RequirementsGrid';
 import ScheduleView from './components/ScheduleView';
-import { Worker, DayOfWeek, StaffingRequirement, ScheduleEntry } from './types';
-import { DAYS, HOURS } from './constants';
+import BarManager from './components/BarManager';
+import { Worker, DayOfWeek, StaffingRequirement, ScheduleEntry, Bar } from './types';
+import { DAYS, getHoursForDay } from './constants';
 import { GeminiScheduler } from './services/geminiService';
 
-const STORAGE_KEY = 'bar_shift_master_storage_v1';
+const STORAGE_KEY = 'bar_shift_master_multi_v1';
+
+const getInitialBars = (): Bar[] => {
+  const savedData = localStorage.getItem(STORAGE_KEY);
+  if (savedData) {
+    try {
+      return JSON.parse(savedData);
+    } catch (e) {
+      console.error("Failed to parse saved bars", e);
+    }
+  }
+  return [];
+};
 
 const App: React.FC = () => {
+  const [bars, setBars] = useState<Bar[]>(getInitialBars());
+  const [selectedBarId, setSelectedBarId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('workers');
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [requirements, setRequirements] = useState<StaffingRequirement[]>([]);
-  const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(bars.length > 0 ? new Date() : null);
 
-  // Initialize and Load Data
+  const currentBar = bars.find(b => b.id === selectedBarId);
+
+  // Persistence
   useEffect(() => {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        if (parsed.workers) setWorkers(parsed.workers);
-        if (parsed.requirements) setRequirements(parsed.requirements);
-        if (parsed.schedule) setSchedule(parsed.schedule);
-        setLastSaved(new Date());
-      } catch (e) {
-        console.error("Failed to load saved data", e);
-        initializeRequirements();
-      }
-    } else {
-      initializeRequirements();
-    }
-  }, []);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(bars));
+    setLastSaved(new Date());
+  }, [bars]);
 
-  // Save Data on changes
-  useEffect(() => {
-    if (requirements.length > 0) {
-      const dataToSave = {
-        workers,
-        requirements,
-        schedule
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-      setLastSaved(new Date());
+  // Actions for Bars
+  const handleAddBar = (bar: Bar) => setBars(prev => [...prev, bar]);
+  const handleDeleteBar = (id: string) => {
+    if (window.confirm("Are you sure? All data for this bar will be lost.")) {
+      setBars(prev => prev.filter(b => b.id !== id));
     }
-  }, [workers, requirements, schedule]);
-
-  const initializeRequirements = () => {
-    const initialReqs: StaffingRequirement[] = [];
-    DAYS.forEach(day => {
-      HOURS.forEach(hour => {
-        initialReqs.push({ day, hour, neededCount: 0 });
-      });
-    });
-    setRequirements(initialReqs);
   };
 
+  const updateCurrentBar = (updates: Partial<Bar>) => {
+    if (!selectedBarId) return;
+    setBars(prev => prev.map(b => b.id === selectedBarId ? { ...b, ...updates } : b));
+  };
+
+  // Actions for Staff/Requirements/Schedule (scoped to current bar)
   const handleAddWorker = (worker: Worker) => {
-    setWorkers(prev => [...prev, worker]);
+    if (!currentBar) return;
+    updateCurrentBar({ workers: [...currentBar.workers, worker] });
+  };
+
+  const handleUpdateWorker = (updatedWorker: Worker) => {
+    if (!currentBar) return;
+    updateCurrentBar({ workers: currentBar.workers.map(w => w.id === updatedWorker.id ? updatedWorker : w) });
   };
 
   const handleRemoveWorker = (id: string) => {
-    setWorkers(prev => prev.filter(w => w.id !== id));
-    // When removing a worker, we should also clean up the requirements if they exceed the new total
-    // But the RequirementsGrid handles the cap visually/interactively. 
-    // We do clean the schedule though.
-    setSchedule(prev => prev.filter(s => s.workerId !== id));
+    if (!currentBar || !window.confirm("Remove this staff member?")) return;
+    updateCurrentBar({
+      workers: currentBar.workers.filter(w => w.id !== id),
+      schedule: currentBar.schedule.filter(s => s.workerId !== id)
+    });
   };
 
   const handleUpdateRequirement = (day: DayOfWeek, hour: number, count: number) => {
-    setRequirements(prev => prev.map(r => 
-      (r.day === day && r.hour === hour) ? { ...r, neededCount: count } : r
-    ));
-  };
-
-  const handleReset = () => {
-    if (window.confirm("Are you sure you want to clear all data? This will remove all workers and reset requirements.")) {
-      localStorage.removeItem(STORAGE_KEY);
-      setWorkers([]);
-      setSchedule([]);
-      initializeRequirements();
-      setActiveTab('workers');
+    if (!currentBar) return;
+    const existing = currentBar.requirements.find(r => r.day === day && r.hour === hour);
+    let newReqs;
+    if (existing) {
+      newReqs = currentBar.requirements.map(r => (r.day === day && r.hour === hour) ? { ...r, neededCount: count } : r);
+    } else {
+      newReqs = [...currentBar.requirements, { day, hour, neededCount: count }];
     }
+    updateCurrentBar({ requirements: newReqs });
   };
 
   const generateSchedule = async () => {
-    if (workers.length === 0) return;
-    
+    if (!currentBar || currentBar.workers.length === 0) return;
     setIsGenerating(true);
     try {
       const scheduler = new GeminiScheduler();
-      const newSchedule = await scheduler.generateSchedule(workers, requirements);
-      setSchedule(newSchedule);
+      const newSchedule = await scheduler.generateSchedule(currentBar.workers, currentBar.requirements, currentBar.operatingHours);
+      updateCurrentBar({ schedule: newSchedule });
       setActiveTab('schedule');
     } catch (error) {
-      alert("Scheduling failed. Please check your console and try again.");
+      alert("Scheduling failed. Try again.");
     } finally {
       setIsGenerating(false);
     }
   };
 
   const exportToCSV = () => {
-    if (schedule.length === 0) return;
-
+    if (!currentBar || currentBar.schedule.length === 0) return;
     let csvContent = "data:text/csv;charset=utf-8,Day,Hour,Worker Name\n";
-    
     DAYS.forEach(day => {
-      HOURS.forEach(hour => {
-        const staff = schedule.filter(s => s.day === day && s.hour === hour);
+      const hours = getHoursForDay(currentBar.operatingHours[day]);
+      hours.forEach(hour => {
+        const staff = currentBar.schedule.filter(s => s.day === day && s.hour === hour);
         staff.forEach(s => {
-          const w = workers.find(worker => worker.id === s.workerId);
-          if (w) {
-            csvContent += `${day},${hour}:00,${w.name}\n`;
-          }
+          const w = currentBar.workers.find(worker => worker.id === s.workerId);
+          if (w) csvContent += `${day},${hour}:00,${w.name}\n`;
         });
       });
     });
-
-    const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `bar_schedule_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
+    link.setAttribute("href", encodeURI(csvContent));
+    link.setAttribute("download", `${currentBar.name}_schedule.csv`);
     link.click();
-    document.body.removeChild(link);
   };
+
+  if (!selectedBarId) {
+    return <BarManager bars={bars} onAddBar={handleAddBar} onSelectBar={setSelectedBarId} onDeleteBar={handleDeleteBar} />;
+  }
 
   return (
     <Layout 
       activeTab={activeTab} 
       setActiveTab={setActiveTab} 
-      onReset={handleReset}
+      onBack={() => setSelectedBarId(null)} 
       lastSaved={lastSaved}
+      barName={currentBar?.name}
     >
       <div className="animate-in fade-in duration-500">
-        {activeTab === 'workers' && (
+        {activeTab === 'workers' && currentBar && (
           <StaffList 
-            workers={workers} 
+            workers={currentBar.workers} 
             onAddWorker={handleAddWorker} 
+            onUpdateWorker={handleUpdateWorker}
             onRemoveWorker={handleRemoveWorker} 
           />
         )}
-        {activeTab === 'requirements' && (
+        {activeTab === 'requirements' && currentBar && (
           <RequirementsGrid 
-            requirements={requirements} 
+            requirements={currentBar.requirements} 
             onUpdateRequirement={handleUpdateRequirement} 
-            totalWorkers={workers.length}
+            totalWorkers={currentBar.workers.length}
+            operatingHours={currentBar.operatingHours}
           />
         )}
-        {activeTab === 'schedule' && (
+        {activeTab === 'schedule' && currentBar && (
           <ScheduleView 
-            workers={workers} 
-            requirements={requirements} 
-            schedule={schedule}
+            workers={currentBar.workers} 
+            requirements={currentBar.requirements} 
+            schedule={currentBar.schedule}
             isGenerating={isGenerating}
             onGenerate={generateSchedule}
             onExport={exportToCSV}
+            operatingHours={currentBar.operatingHours}
           />
         )}
       </div>
