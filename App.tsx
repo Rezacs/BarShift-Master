@@ -127,15 +127,35 @@ const App: React.FC = () => {
   };
 
   const handleUpdateRequirement = (day: DayOfWeek, hour: number, count: number) => {
-    if (!currentBar) return;
-    const existing = currentBar.requirements.find(r => r.day === day && r.hour === hour);
-    let newReqs;
-    if (existing) {
-      newReqs = currentBar.requirements.map(r => (r.day === day && r.hour === hour) ? { ...r, neededCount: count } : r);
-    } else {
-      newReqs = [...currentBar.requirements, { day, hour, neededCount: count }];
-    }
-    updateCurrentBar({ requirements: newReqs });
+    if (!selectedBarId) return;
+    setBars(prev => prev.map(b => {
+      if (b.id !== selectedBarId) return b;
+      const existingIdx = b.requirements.findIndex(r => r.day === day && r.hour === hour);
+      let newReqs;
+      if (existingIdx > -1) {
+        newReqs = b.requirements.map((r, i) => i === existingIdx ? { ...r, neededCount: count } : r);
+      } else {
+        newReqs = [...b.requirements, { day, hour, neededCount: count }];
+      }
+      return { ...b, requirements: newReqs };
+    }));
+  };
+
+  const handleUpdateRequirementsBulk = (updates: { day: DayOfWeek, hour: number, count: number }[]) => {
+    if (!selectedBarId) return;
+    setBars(prev => prev.map(b => {
+      if (b.id !== selectedBarId) return b;
+      let newReqs = [...b.requirements];
+      updates.forEach(({ day, hour, count }) => {
+        const existingIdx = newReqs.findIndex(r => r.day === day && r.hour === hour);
+        if (existingIdx > -1) {
+          newReqs[existingIdx] = { ...newReqs[existingIdx], neededCount: count };
+        } else {
+          newReqs.push({ day, hour, neededCount: count });
+        }
+      });
+      return { ...b, requirements: newReqs };
+    }));
   };
 
   const generateSchedule = async () => {
@@ -218,6 +238,7 @@ const App: React.FC = () => {
               <RequirementsGrid 
                 requirements={currentBar.requirements} 
                 onUpdateRequirement={handleUpdateRequirement} 
+                onUpdateRequirementsBulk={handleUpdateRequirementsBulk}
                 totalWorkers={currentBar.workers.length}
                 operatingHours={currentBar.operatingHours}
               />

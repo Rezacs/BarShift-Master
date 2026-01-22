@@ -6,11 +6,18 @@ import { DAYS, formatHour, getHoursForDay } from '../constants';
 interface RequirementsGridProps {
   requirements: StaffingRequirement[];
   onUpdateRequirement: (day: DayOfWeek, hour: number, count: number) => void;
+  onUpdateRequirementsBulk: (updates: { day: DayOfWeek, hour: number, count: number }[]) => void;
   totalWorkers: number;
   operatingHours: Record<DayOfWeek, OperatingHours>;
 }
 
-const RequirementsGrid: React.FC<RequirementsGridProps> = ({ requirements, onUpdateRequirement, totalWorkers, operatingHours }) => {
+const RequirementsGrid: React.FC<RequirementsGridProps> = ({ 
+  requirements, 
+  onUpdateRequirement, 
+  onUpdateRequirementsBulk,
+  totalWorkers, 
+  operatingHours 
+}) => {
   const getRequirement = (day: DayOfWeek, hour: number) => {
     return requirements.find(r => r.day === day && r.hour === hour)?.neededCount || 0;
   };
@@ -23,25 +30,32 @@ const RequirementsGrid: React.FC<RequirementsGridProps> = ({ requirements, onUpd
 
   const bulkIncrementCol = (day: DayOfWeek) => {
     const hours = getHoursForDay(operatingHours[day]);
-    hours.forEach(hour => {
+    const updates = hours.map(hour => {
       const current = getRequirement(day, hour);
-      if (current < totalWorkers) {
-        onUpdateRequirement(day, hour, current + 1);
-      }
+      return {
+        day,
+        hour,
+        count: Math.min(totalWorkers, current + 1)
+      };
     });
+    onUpdateRequirementsBulk(updates);
   };
 
   const bulkIncrementRow = (hour: number) => {
+    const updates: { day: DayOfWeek, hour: number, count: number }[] = [];
     DAYS.forEach(day => {
       const config = operatingHours[day];
       const isOpen = hour >= config.open && hour <= config.close;
       if (isOpen) {
         const current = getRequirement(day, hour);
-        if (current < totalWorkers) {
-          onUpdateRequirement(day, hour, current + 1);
-        }
+        updates.push({
+          day,
+          hour,
+          count: Math.min(totalWorkers, current + 1)
+        });
       }
     });
+    onUpdateRequirementsBulk(updates);
   };
 
   // Build the vertical axis: union of all operating hours
