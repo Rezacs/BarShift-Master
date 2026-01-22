@@ -40,6 +40,11 @@ const App: React.FC = () => {
 
   // Actions for Bars
   const handleAddBar = (bar: Bar) => setBars(prev => [...prev, bar]);
+  
+  const handleUpdateBar = (updatedBar: Bar) => {
+    setBars(prev => prev.map(b => b.id === updatedBar.id ? updatedBar : b));
+  };
+
   const handleDeleteBar = (id: string) => {
     if (window.confirm("Are you sure? All data for this bar will be lost.")) {
       setBars(prev => prev.filter(b => b.id !== id));
@@ -117,7 +122,15 @@ const App: React.FC = () => {
   };
 
   if (!selectedBarId) {
-    return <BarManager bars={bars} onAddBar={handleAddBar} onSelectBar={setSelectedBarId} onDeleteBar={handleDeleteBar} />;
+    return (
+      <BarManager 
+        bars={bars} 
+        onAddBar={handleAddBar} 
+        onUpdateBar={handleUpdateBar}
+        onSelectBar={setSelectedBarId} 
+        onDeleteBar={handleDeleteBar} 
+      />
+    );
   }
 
   return (
