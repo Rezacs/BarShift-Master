@@ -9,6 +9,15 @@ export enum DayOfWeek {
   Sunday = 'Sunday'
 }
 
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  phone: string;
+  countryCode: string;
+  password?: string;
+}
+
 export interface DayConstraint {
   maxHour?: number;
   maxTotalHours?: number;
