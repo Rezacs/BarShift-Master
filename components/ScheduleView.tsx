@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Worker, StaffingRequirement, ScheduleEntry, DayOfWeek, OperatingHours } from '../types';
 import { DAYS, formatHour } from '../constants';
 
@@ -14,6 +14,16 @@ interface ScheduleViewProps {
   onToggleEntry: (workerId: string, day: DayOfWeek, hour: number) => void;
 }
 
+const GENERATION_PHASES = [
+  { msg: "Initializing AI Scheduling Engine...", progress: 5 },
+  { msg: "Analyzing Staff Availability & Preferred Hours...", progress: 18 },
+  { msg: "Processing Hard Constraints (Unavailable Days)...", progress: 32 },
+  { msg: "Optimizing Strict 8-Hour Daily Limits...", progress: 54 },
+  { msg: "Balancing Weekly Workload Fairness...", progress: 72 },
+  { msg: "Verifying Hourly Staffing Demands...", progress: 88 },
+  { msg: "Finalizing Roster Data...", progress: 96 },
+];
+
 const ScheduleView: React.FC<ScheduleViewProps> = ({ 
   workers, 
   requirements, 
@@ -26,12 +36,42 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'overview' | 'individual'>('overview');
   const [activePicker, setActivePicker] = useState<{day: DayOfWeek, hour: number} | null>(null);
+  const [currentPhaseIdx, setCurrentPhaseIdx] = useState(0);
+  const [displayProgress, setDisplayProgress] = useState(0);
+
+  // Simulated progress for AI Generation
+  useEffect(() => {
+    let interval: number;
+    if (isGenerating) {
+      setCurrentPhaseIdx(0);
+      setDisplayProgress(0);
+      
+      interval = window.setInterval(() => {
+        setCurrentPhaseIdx(prev => Math.min(prev + 1, GENERATION_PHASES.length - 1));
+      }, 3500); // Change message every 3.5s
+
+      // Slower progress bar increments
+      const progressInt = window.setInterval(() => {
+        setDisplayProgress(prev => {
+          if (prev < 98) return prev + (Math.random() * 2);
+          return prev;
+        });
+      }, 800);
+
+      return () => {
+        window.clearInterval(interval);
+        window.clearInterval(progressInt);
+      };
+    }
+  }, [isGenerating]);
 
   const getStaffForSlot = (day: DayOfWeek, hour: number) => {
+    // STABLE ORDERING: Sort workers alphabetically by name so they always appear in the same order
     return schedule
       .filter(s => s.day === day && s.hour === hour)
       .map(s => workers.find(w => w.id === s.workerId))
-      .filter((w): w is Worker => !!w);
+      .filter((w): w is Worker => !!w)
+      .sort((a, b) => a.name.localeCompare(b.name));
   };
 
   const getDayStaffCount = (day: DayOfWeek, hour: number) => {
@@ -115,7 +155,38 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
         </div>
       </div>
 
-      {isEmpty ? (
+      {isGenerating && (
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 p-12 text-center shadow-xl animate-in zoom-in-95 duration-500">
+          <div className="mb-8 relative inline-block">
+            <div className="w-24 h-24 border-4 border-slate-50 rounded-full"></div>
+            <div 
+              className="w-24 h-24 border-4 border-amber-500 rounded-full absolute top-0 left-0 animate-spin border-t-transparent"
+              style={{ animationDuration: '2s' }}
+            ></div>
+            <div className="absolute inset-0 flex items-center justify-center font-black text-slate-900 text-lg">
+              {Math.round(displayProgress)}%
+            </div>
+          </div>
+          
+          <h3 className="text-xl font-black text-slate-900 mb-2">Compiling Master Schedule</h3>
+          <p className="text-amber-600 text-sm font-black uppercase tracking-widest h-6 transition-all duration-300">
+            {GENERATION_PHASES[currentPhaseIdx].msg}
+          </p>
+          
+          <div className="max-w-md mx-auto mt-8 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-50">
+            <div 
+              className="h-full bg-slate-900 transition-all duration-700 ease-out"
+              style={{ width: `${displayProgress}%` }}
+            ></div>
+          </div>
+          
+          <p className="text-slate-400 text-xs mt-6 max-w-sm mx-auto">
+            Our AI is currently performing millions of calculations to ensure fair distribution and compliance with all bar regulations.
+          </p>
+        </div>
+      )}
+
+      {isEmpty && !isGenerating ? (
         <div className="bg-white rounded-[3rem] border-2 border-dashed border-slate-200 py-24 text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-50 text-slate-300 mb-6">
             <i className="fas fa-calendar-alt text-2xl"></i>
@@ -123,7 +194,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
           <h3 className="text-xl font-bold text-slate-900">Roster Empty</h3>
           <p className="text-slate-400 text-sm mt-2">Use the AI Generate button to create a balanced schedule.</p>
         </div>
-      ) : viewMode === 'overview' ? (
+      ) : viewMode === 'overview' && !isGenerating ? (
         <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden animate-in fade-in duration-500">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[1000px]">
@@ -163,17 +234,21 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                           <td key={day} className={`p-3 align-top border-l border-slate-50 ${!isOpen ? 'bg-slate-50/50' : isUnderstaffed && needed > 0 ? 'bg-red-50/20' : ''}`}>
                             {isOpen ? (
                               <div className="relative">
-                                <div className="flex flex-wrap gap-1.5 min-h-[36px]">
+                                <div className="flex flex-col gap-1 min-h-[36px]">
                                   {staff.map(w => (
                                     <div 
                                       key={w.id} 
-                                      className={`group/tag inline-flex items-center gap-1.5 px-2 py-1.5 rounded-xl border text-[10px] font-black transition-all shadow-sm text-white`}
-                                      style={{ backgroundColor: w.color, borderColor: 'rgba(0,0,0,0.1)' }}
+                                      className={`group/tag w-full h-8 px-3 rounded-lg border-l-4 flex items-center justify-between text-[10px] font-black transition-all shadow-sm`}
+                                      style={{ 
+                                        backgroundColor: `${w.color}15`, 
+                                        borderLeftColor: w.color,
+                                        borderColor: `${w.color}25` 
+                                      }}
                                     >
-                                      <span className="truncate">{w.name}</span>
+                                      <span className="truncate text-slate-700 uppercase tracking-tighter">{w.name}</span>
                                       <button 
                                         onClick={() => onToggleEntry(w.id, day, hour)}
-                                        className="opacity-0 group-hover/tag:opacity-100 transition-opacity hover:scale-125"
+                                        className="opacity-0 group-hover/tag:opacity-100 transition-opacity hover:scale-125 text-slate-400 hover:text-red-500"
                                       >
                                         <i className="fas fa-times-circle"></i>
                                       </button>
@@ -182,8 +257,8 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                                   
                                   <button 
                                     onClick={() => setActivePicker(isPickerActive ? null : {day, hour})}
-                                    className={`w-8 h-8 rounded-xl border-2 border-dashed flex items-center justify-center transition-all ${
-                                      isPickerActive ? 'bg-amber-100 border-amber-300 text-amber-600' : 'border-slate-100 text-slate-300 hover:border-slate-300 hover:text-slate-500'
+                                    className={`w-full h-8 rounded-lg border-2 border-dashed flex items-center justify-center transition-all ${
+                                      isPickerActive ? 'bg-amber-50 border-amber-200 text-amber-500' : 'border-slate-100 text-slate-200 hover:border-slate-200 hover:text-slate-400'
                                     }`}
                                   >
                                     <i className={`fas ${isPickerActive ? 'fa-times' : 'fa-plus'} text-[10px]`}></i>
@@ -214,7 +289,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
             </table>
           </div>
         </div>
-      ) : (
+      ) : viewMode === 'individual' && !isGenerating ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {workers.map(worker => {
             const workerShifts = schedule.filter(s => s.workerId === worker.id);
@@ -260,7 +335,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
             );
           })}
         </div>
-      )}
+      ) : null}
     </div>
   );
 };
