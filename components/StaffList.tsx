@@ -66,8 +66,11 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
       const existing = workers.find(w => w.id === editingWorkerId);
       finalColor = existing ? existing.color : WORKER_COLORS[workers.length % WORKER_COLORS.length];
     } else {
-      // Pick next color in sequence to ensure uniqueness
-      finalColor = WORKER_COLORS[workers.length % WORKER_COLORS.length];
+      // Find the first color that isn't already used by the current team
+      const usedColors = workers.map(w => w.color);
+      const firstUnused = WORKER_COLORS.find(c => !usedColors.includes(c));
+      // Fallback to cycling through the palette if all colors are used
+      finalColor = firstUnused || WORKER_COLORS[workers.length % WORKER_COLORS.length];
     }
 
     const workerData: Worker = {
