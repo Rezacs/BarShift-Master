@@ -28,7 +28,6 @@ const App: React.FC = () => {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  // Load bars when user changes
   useEffect(() => {
     if (currentUser) {
       const savedData = localStorage.getItem(`${DATA_STORAGE_PREFIX}${currentUser.id}_bars`);
@@ -47,7 +46,6 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
-  // Save bars when bars change
   useEffect(() => {
     if (currentUser && bars.length > 0) {
       localStorage.setItem(`${DATA_STORAGE_PREFIX}${currentUser.id}_bars`, JSON.stringify(bars));
@@ -57,15 +55,12 @@ const App: React.FC = () => {
 
   const currentBar = bars.find(b => b.id === selectedBarId);
 
-  // Auth Actions
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
   };
 
   const handleLogout = () => {
-    // Removed window.confirm to avoid environment-specific blocking issues
-    console.log("App: Executing logout procedure");
     localStorage.removeItem(AUTH_STORAGE_KEY);
     setCurrentUser(null);
     setSelectedBarId(null);
@@ -83,7 +78,6 @@ const App: React.FC = () => {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedUser));
   };
 
-  // Actions for Bars
   const handleAddBar = (bar: Bar) => setBars(prev => [...prev, bar]);
   
   const handleUpdateBar = (updatedBar: Bar) => {
@@ -107,7 +101,6 @@ const App: React.FC = () => {
     setBars(prev => prev.map(b => b.id === selectedBarId ? { ...b, ...updates } : b));
   };
 
-  // Staff/Requirements/Schedule Actions
   const handleAddWorker = (worker: Worker) => {
     if (!currentBar) return;
     updateCurrentBar({ workers: [...currentBar.workers, worker] });
@@ -158,6 +151,19 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleToggleScheduleEntry = (workerId: string, day: DayOfWeek, hour: number) => {
+    if (!currentBar) return;
+    const isAssigned = currentBar.schedule.some(s => s.workerId === workerId && s.day === day && s.hour === hour);
+    
+    let newSchedule;
+    if (isAssigned) {
+      newSchedule = currentBar.schedule.filter(s => !(s.workerId === workerId && s.day === day && s.hour === hour));
+    } else {
+      newSchedule = [...currentBar.schedule, { workerId, day, hour }];
+    }
+    updateCurrentBar({ schedule: newSchedule });
+  };
+
   const generateSchedule = async () => {
     if (!currentBar || currentBar.workers.length === 0) return;
     setIsGenerating(true);
@@ -167,7 +173,7 @@ const App: React.FC = () => {
       updateCurrentBar({ schedule: newSchedule });
       setActiveTab('schedule');
     } catch (error) {
-      alert("AI failed to compile schedule. Ensure you have enough staff for the requested hours.");
+      alert("AI failed to compile schedule. Ensure requirements and staff numbers are compatible.");
     } finally {
       setIsGenerating(false);
     }
@@ -252,6 +258,7 @@ const App: React.FC = () => {
                 onGenerate={generateSchedule}
                 onExport={exportToCSV}
                 operatingHours={currentBar.operatingHours}
+                onToggleEntry={handleToggleScheduleEntry}
               />
             )}
           </div>

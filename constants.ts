@@ -22,7 +22,8 @@ export const formatHour = (hour: number) => {
 
 export const getHoursForDay = (config: OperatingHours) => {
   const hours: number[] = [];
-  for (let i = config.open; i <= config.close; i++) {
+  // Changed <= to < because the closing hour is exclusive (the end of the final shift)
+  for (let i = config.open; i < config.close; i++) {
     hours.push(i);
   }
   return hours;

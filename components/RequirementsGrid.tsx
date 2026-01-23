@@ -45,7 +45,8 @@ const RequirementsGrid: React.FC<RequirementsGridProps> = ({
     const updates: { day: DayOfWeek, hour: number, count: number }[] = [];
     DAYS.forEach(day => {
       const config = operatingHours[day];
-      const isOpen = hour >= config.open && hour <= config.close;
+      // Changed <= to < because the closing hour is exclusive
+      const isOpen = hour >= config.open && hour < config.close;
       if (isOpen) {
         const current = getRequirement(day, hour);
         updates.push({
@@ -113,7 +114,8 @@ const RequirementsGrid: React.FC<RequirementsGridProps> = ({
               {allHours.map(hour => {
                 const isOpenAnywhere = DAYS.some(d => {
                   const config = operatingHours[d];
-                  return hour >= config.open && hour <= config.close;
+                  // Changed <= to < because the closing hour is exclusive
+                  return hour >= config.open && hour < config.close;
                 });
 
                 if (!isOpenAnywhere) return null;
@@ -134,7 +136,8 @@ const RequirementsGrid: React.FC<RequirementsGridProps> = ({
                     </td>
                     {DAYS.map(day => {
                       const config = operatingHours[day];
-                      const isOpen = hour >= config.open && hour <= config.close;
+                      // Changed <= to < because the closing hour is exclusive
+                      const isOpen = hour >= config.open && hour < config.close;
                       const count = getRequirement(day, hour);
                       
                       return (
