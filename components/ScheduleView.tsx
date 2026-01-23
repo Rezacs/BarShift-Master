@@ -49,7 +49,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
       <div className="absolute z-[100] mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 p-3 min-w-[180px] animate-in zoom-in-95 duration-200">
         <div className="flex justify-between items-center mb-2 px-1">
           <span className="text-[10px] font-black uppercase text-slate-400">Available Staff</span>
-          <button onClick={() => setActivePicker(null)} className="text-slate-300 hover:text-slate-600"><i className="fas fa-times"></i></button>
+          <button onClick={() => setActivePicker(null)} className="text-slate-300 hover:text-slate-600 transition-colors"><i className="fas fa-times"></i></button>
         </div>
         <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar pr-1">
           {availableStaff.length === 0 ? (
@@ -63,7 +63,10 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
               }}
               className="w-full text-left p-2 rounded-xl hover:bg-slate-50 text-[11px] font-bold text-slate-700 flex items-center justify-between transition-colors group"
             >
-              <span>{w.name}</span>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: w.color }} />
+                <span>{w.name}</span>
+              </div>
               <i className="fas fa-plus text-[8px] opacity-0 group-hover:opacity-100 transition-opacity text-amber-500"></i>
             </button>
           ))}
@@ -164,16 +167,15 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                                   {staff.map(w => (
                                     <div 
                                       key={w.id} 
-                                      className={`group/tag inline-flex items-center gap-1.5 px-2 py-1.5 rounded-xl border text-[10px] font-black transition-all ${
-                                        w.isFlexible ? 'bg-slate-50 border-slate-200 text-slate-500 italic' : 'bg-white border-slate-200 text-slate-800 shadow-sm'
-                                      }`}
+                                      className={`group/tag inline-flex items-center gap-1.5 px-2 py-1.5 rounded-xl border text-[10px] font-black transition-all shadow-sm text-white`}
+                                      style={{ backgroundColor: w.color, borderColor: 'rgba(0,0,0,0.1)' }}
                                     >
-                                      <span>{w.name}</span>
+                                      <span className="truncate">{w.name}</span>
                                       <button 
                                         onClick={() => onToggleEntry(w.id, day, hour)}
-                                        className="opacity-0 group-hover/tag:opacity-100 transition-opacity text-red-400 hover:text-red-600"
+                                        className="opacity-0 group-hover/tag:opacity-100 transition-opacity hover:scale-125"
                                       >
-                                        <i className="fas fa-times"></i>
+                                        <i className="fas fa-times-circle"></i>
                                       </button>
                                     </div>
                                   ))}
@@ -221,8 +223,11 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
               <div key={worker.id} className="bg-white rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-slate-100 overflow-hidden hover:shadow-xl transition-all">
                 <div className="bg-slate-50/50 px-8 py-6 border-b border-slate-100 flex justify-between items-center">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-sm">
-                      {worker.name.charAt(0)}
+                    <div 
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm text-white shadow-sm"
+                      style={{ backgroundColor: worker.color }}
+                    >
+                      {worker.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
                       <h3 className="font-black text-slate-900 text-lg leading-tight">{worker.name}</h3>

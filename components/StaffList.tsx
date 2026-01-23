@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Worker, DayOfWeek, DayConstraint } from '../types';
-import { HOURS, DAYS, formatHour } from '../constants';
+import { HOURS, DAYS, formatHour, WORKER_COLORS } from '../constants';
 
 interface StaffListProps {
   workers: Worker[];
@@ -61,9 +61,19 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
     e.preventDefault();
     if (!name) return;
 
+    let finalColor = '';
+    if (editingWorkerId) {
+      const existing = workers.find(w => w.id === editingWorkerId);
+      finalColor = existing ? existing.color : WORKER_COLORS[workers.length % WORKER_COLORS.length];
+    } else {
+      // Pick next color in sequence to ensure uniqueness
+      finalColor = WORKER_COLORS[workers.length % WORKER_COLORS.length];
+    }
+
     const workerData: Worker = {
       id: editingWorkerId || crypto.randomUUID(),
       name,
+      color: finalColor,
       possibleStart,
       possibleEnd,
       preferredStart: isFlexible ? possibleStart : Math.max(possibleStart, preferredStart),
@@ -267,8 +277,11 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
           <div key={worker.id} className={`p-5 rounded-xl border shadow-sm hover:shadow-md transition-shadow group relative bg-white ${worker.isFlexible ? 'border-dashed border-slate-300' : 'border-gray-200'}`}>
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center space-x-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold border ${worker.isFlexible ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-slate-100 text-slate-500 border-gray-200'}`}>
-                  {worker.name.charAt(0)}
+                <div 
+                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold border text-white transition-colors`}
+                  style={{ backgroundColor: worker.color, borderColor: 'rgba(0,0,0,0.1)' }}
+                >
+                  {worker.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900 leading-tight">{worker.name}</h3>

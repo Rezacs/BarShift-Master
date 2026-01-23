@@ -22,7 +22,6 @@ export const formatHour = (hour: number) => {
 
 export const getHoursForDay = (config: OperatingHours) => {
   const hours: number[] = [];
-  // Changed <= to < because the closing hour is exclusive (the end of the final shift)
   for (let i = config.open; i < config.close; i++) {
     hours.push(i);
   }
@@ -30,6 +29,13 @@ export const getHoursForDay = (config: OperatingHours) => {
 };
 
 export const DEFAULT_OPERATING_HOURS: OperatingHours = { open: 4, close: 20 };
+
+export const WORKER_COLORS = [
+  '#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', 
+  '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6',
+  '#84CC16', '#D946EF', '#475569', '#78350F', '#0F172A',
+  '#BE123C', '#1D4ED8', '#047857', '#B45309', '#6D28D9'
+];
 
 export const COUNTRY_CODES = [
   { code: '+1', name: 'USA/Canada', flag: '🇺🇸' },

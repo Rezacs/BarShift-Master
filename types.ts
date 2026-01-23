@@ -26,6 +26,7 @@ export interface DayConstraint {
 export interface Worker {
   id: string;
   name: string;
+  color: string; // Automatic unique color
   possibleStart: number;
   possibleEnd: number;
   preferredStart: number;
