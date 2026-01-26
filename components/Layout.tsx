@@ -27,12 +27,12 @@ const Layout: React.FC<LayoutProps> = ({
 }) => {
   const tabs = [
     { id: 'workers', label: 'Staff', icon: 'fa-users' },
+    { id: 'tags', label: 'Roles', icon: 'fa-tags' },
     { id: 'requirements', label: 'Needs', icon: 'fa-clipboard-list' },
     { id: 'schedule', label: 'Schedule', icon: 'fa-calendar-alt' },
   ];
 
   const handleLogoutClick = () => {
-    console.log("Layout: Logout button clicked");
     if (onLogout) {
       onLogout();
     }
@@ -78,7 +78,7 @@ const Layout: React.FC<LayoutProps> = ({
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
                       activeTab === tab.id
-                        ? 'bg-amber-500 text-slate-950 shadow-lg'
+                        ? 'bg-amber-50 text-slate-950 shadow-lg'
                         : 'text-slate-500 hover:bg-slate-800 hover:text-white'
                     }`}
                   >

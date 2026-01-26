@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import StaffList from './components/StaffList';
+import TagManager from './components/TagManager';
 import RequirementsGrid from './components/RequirementsGrid';
 import ScheduleView from './components/ScheduleView';
 import BarManager from './components/BarManager';
 import Auth from './components/Auth';
 import ProfileModal from './components/ProfileModal';
-import { Worker, DayOfWeek, StaffingRequirement, ScheduleEntry, Bar, User } from './types';
+import { Worker, DayOfWeek, StaffingRequirement, ScheduleEntry, Bar, User, Tag } from './types';
 import { DAYS, getHoursForDay } from './constants';
 import { GeminiScheduler } from './services/geminiService';
 
@@ -33,7 +34,14 @@ const App: React.FC = () => {
       const savedData = localStorage.getItem(`${DATA_STORAGE_PREFIX}${currentUser.id}_bars`);
       if (savedData) {
         try {
-          setBars(JSON.parse(savedData));
+          const parsed = JSON.parse(savedData);
+          // Migrate old bars without tags
+          const migrated = parsed.map((b: any) => ({
+            ...b,
+            tags: b.tags || [],
+            workers: b.workers.map((w: any) => ({ ...w, tagIds: w.tagIds || [] }))
+          }));
+          setBars(migrated);
           setLastSaved(new Date());
         } catch (e) {
           console.error("Failed to parse bars", e);
@@ -104,6 +112,27 @@ const App: React.FC = () => {
       requirements: currentBar.requirements.map(r => ({
         ...r,
         mandatoryWorkerIds: r.mandatoryWorkerIds?.filter(mid => mid !== id) || []
+      }))
+    });
+  };
+
+  const handleAddTag = (tag: Tag) => {
+    if (!currentBar) return;
+    updateCurrentBar({ tags: [...currentBar.tags, tag] });
+  };
+
+  const handleUpdateTag = (updatedTag: Tag) => {
+    if (!currentBar) return;
+    updateCurrentBar({ tags: currentBar.tags.map(t => t.id === updatedTag.id ? updatedTag : t) });
+  };
+
+  const handleRemoveTag = (id: string) => {
+    if (!currentBar || !window.confirm("Delete this role/skill tag? It will be removed from all staff.")) return;
+    updateCurrentBar({
+      tags: currentBar.tags.filter(t => t.id !== id),
+      workers: currentBar.workers.map(w => ({
+        ...w,
+        tagIds: w.tagIds.filter(tid => tid !== id)
       }))
     });
   };
@@ -185,7 +214,6 @@ const App: React.FC = () => {
   const generateSchedule = async () => {
     if (!currentBar || currentBar.workers.length === 0) return;
     
-    // Check for API Key selection
     // @ts-ignore
     if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
       // @ts-ignore
@@ -260,7 +288,10 @@ const App: React.FC = () => {
         <Layout user={currentUser} onLogout={handleLogout} onEditProfile={() => setShowProfileModal(true)} activeTab={activeTab} setActiveTab={setActiveTab} onBack={() => setSelectedBarId(null)} lastSaved={lastSaved} barName={currentBar?.name}>
           <div className="animate-in fade-in duration-500">
             {activeTab === 'workers' && (
-              <StaffList workers={currentBar.workers} onAddWorker={handleAddWorker} onUpdateWorker={handleUpdateWorker} onRemoveWorker={handleRemoveWorker} />
+              <StaffList workers={currentBar.workers} tags={currentBar.tags} onAddWorker={handleAddWorker} onUpdateWorker={handleUpdateWorker} onRemoveWorker={handleRemoveWorker} />
+            )}
+            {activeTab === 'tags' && (
+              <TagManager tags={currentBar.tags} onAddTag={handleAddTag} onUpdateTag={handleUpdateTag} onRemoveTag={handleRemoveTag} />
             )}
             {activeTab === 'requirements' && (
               <RequirementsGrid 

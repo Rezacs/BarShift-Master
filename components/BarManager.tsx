@@ -95,6 +95,7 @@ const BarManager: React.FC<BarManagerProps> = ({ bars, onAddBar, onUpdateBar, on
         });
       }
     } else {
+      // Fix: Add missing tags property to match Bar interface defined in types.ts
       const newBar: Bar = {
         id: crypto.randomUUID(),
         name,
@@ -104,7 +105,8 @@ const BarManager: React.FC<BarManagerProps> = ({ bars, onAddBar, onUpdateBar, on
         operatingHours: finalOperatingHours,
         workers: [],
         requirements: [],
-        schedule: []
+        schedule: [],
+        tags: []
       };
       onAddBar(newBar);
     }

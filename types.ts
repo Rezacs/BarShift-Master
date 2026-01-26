@@ -23,11 +23,17 @@ export interface DayConstraint {
   maxTotalHours?: number;
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface Worker {
   id: string;
   name: string;
-  color: string; // Automatic unique color
-  priority: number; // Rank for desired hours (lower number = higher priority for hours)
+  color: string; 
+  priority: number; 
   possibleStart: number;
   possibleEnd: number;
   preferredStart: number;
@@ -37,13 +43,14 @@ export interface Worker {
   unavailableDays: DayOfWeek[];
   isFlexible: boolean;
   constraints: Partial<Record<DayOfWeek, DayConstraint>>;
+  tagIds: string[]; // IDs of assigned tags
 }
 
 export interface StaffingRequirement {
   day: DayOfWeek;
   hour: number;
   neededCount: number;
-  mandatoryWorkerIds?: string[]; // Specifically requested workers for this slot
+  mandatoryWorkerIds?: string[]; 
 }
 
 export interface ScheduleEntry {
@@ -67,4 +74,5 @@ export interface Bar {
   workers: Worker[];
   requirements: StaffingRequirement[];
   schedule: ScheduleEntry[];
+  tags: Tag[]; // Available tags for this establishment
 }

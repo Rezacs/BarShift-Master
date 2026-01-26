@@ -8,10 +8,8 @@ export class GeminiScheduler {
     requirements: StaffingRequirement[], 
     operatingHours: Record<DayOfWeek, OperatingHours>
   ): Promise<ScheduleEntry[]> {
-    // Create fresh instance right before call to ensure the latest API key is used
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-    // Sort workers by priority (lower number = higher priority)
     const sortedWorkers = [...workers].sort((a, b) => (a.priority || 0) - (b.priority || 0));
 
     const prompt = `
@@ -19,12 +17,13 @@ export class GeminiScheduler {
       
       CONTEXT:
       - Operating Hours: ${JSON.stringify(operatingHours)}
-      - Staff Profiles: ${JSON.stringify(sortedWorkers.map(w => ({ 
+      - Staff Profiles (includes Tag IDs for specialized roles): ${JSON.stringify(sortedWorkers.map(w => ({ 
           id: w.id, 
           name: w.name, 
           unavailable: w.unavailableDays, 
           possible: [w.possibleStart, w.possibleEnd],
-          priority: w.priority
+          priority: w.priority,
+          assignedTags: w.tagIds
         })))}
       - Staffing Demands (neededCount): ${JSON.stringify(requirements)}
       
@@ -42,7 +41,6 @@ export class GeminiScheduler {
 
     try {
       const response = await ai.models.generateContent({
-        // Gemini 3 Flash is faster and has much higher free tier limits
         model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
