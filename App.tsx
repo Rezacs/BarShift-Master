@@ -12,7 +12,6 @@ import { DAYS, getHoursForDay } from './constants';
 import { GeminiScheduler } from './services/geminiService';
 
 const AUTH_STORAGE_KEY = 'bar_shift_master_session';
-const USERS_STORAGE_KEY = 'bar_shift_master_users';
 const DATA_STORAGE_PREFIX = 'bar_shift_master_user_';
 
 const App: React.FC = () => {
@@ -27,6 +26,7 @@ const App: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [aiError, setAiError] = useState<{title: string, message: string} | null>(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -68,31 +68,16 @@ const App: React.FC = () => {
   };
 
   const handleUpdateUser = (updatedUser: User) => {
-    const allUsersStr = localStorage.getItem(USERS_STORAGE_KEY);
-    if (allUsersStr) {
-      const allUsers: User[] = JSON.parse(allUsersStr);
-      const updatedList = allUsers.map(u => u.id === updatedUser.id ? updatedUser : u);
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updatedList));
-    }
     setCurrentUser(updatedUser);
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedUser));
   };
 
   const handleAddBar = (bar: Bar) => setBars(prev => [...prev, bar]);
+  const handleUpdateBar = (updatedBar: Bar) => setBars(prev => prev.map(b => b.id === updatedBar.id ? updatedBar : b));
   
-  const handleUpdateBar = (updatedBar: Bar) => {
-    setBars(prev => prev.map(b => b.id === updatedBar.id ? updatedBar : b));
-  };
-
   const handleDeleteBar = (id: string) => {
     if (window.confirm("Permanently delete this establishment?")) {
-      setBars(prev => {
-        const updated = prev.filter(b => b.id !== id);
-        if (currentUser) {
-          localStorage.setItem(`${DATA_STORAGE_PREFIX}${currentUser.id}_bars`, JSON.stringify(updated));
-        }
-        return updated;
-      });
+      setBars(prev => prev.filter(b => b.id !== id));
     }
   };
 
@@ -157,41 +142,33 @@ const App: React.FC = () => {
 
   const handleToggleMandatoryWorker = (day: DayOfWeek, hour: number, workerId: string) => {
     if (!selectedBarId || !currentBar) return;
-    
     setBars(prev => prev.map(b => {
       if (b.id !== selectedBarId) return b;
-      
       const reqIdx = b.requirements.findIndex(r => r.day === day && r.hour === hour);
       let newReqs = [...b.requirements];
       let newSchedule = [...b.schedule];
-      
       if (reqIdx > -1) {
         const req = newReqs[reqIdx];
         const mandatoryIds = req.mandatoryWorkerIds || [];
         const isAlreadyMandatory = mandatoryIds.includes(workerId);
-        
         if (isAlreadyMandatory) {
-          // Remove from mandatory and from schedule
           newReqs[reqIdx] = { ...req, mandatoryWorkerIds: mandatoryIds.filter(id => id !== workerId) };
           newSchedule = newSchedule.filter(s => !(s.workerId === workerId && s.day === day && s.hour === hour));
         } else {
-          // Add to mandatory and add to schedule
           const updatedMandatory = [...mandatoryIds, workerId];
           newReqs[reqIdx] = { 
             ...req, 
             mandatoryWorkerIds: updatedMandatory,
-            neededCount: Math.max(req.neededCount, updatedMandatory.length) // Auto-bump headcount if needed
+            neededCount: Math.max(req.neededCount, updatedMandatory.length)
           };
           if (!newSchedule.some(s => s.workerId === workerId && s.day === day && s.hour === hour)) {
             newSchedule.push({ workerId, day, hour });
           }
         }
       } else {
-        // Create new requirement with mandatory worker
         newReqs.push({ day, hour, neededCount: 1, mandatoryWorkerIds: [workerId] });
         newSchedule.push({ workerId, day, hour });
       }
-      
       return { ...b, requirements: newReqs, schedule: newSchedule };
     }));
   };
@@ -199,28 +176,56 @@ const App: React.FC = () => {
   const handleToggleScheduleEntry = (workerId: string, day: DayOfWeek, hour: number) => {
     if (!currentBar) return;
     const isAssigned = currentBar.schedule.some(s => s.workerId === workerId && s.day === day && s.hour === hour);
-    
-    let newSchedule;
-    if (isAssigned) {
-      newSchedule = currentBar.schedule.filter(s => !(s.workerId === workerId && s.day === day && s.hour === hour));
-    } else {
-      newSchedule = [...currentBar.schedule, { workerId, day, hour }];
-    }
+    let newSchedule = isAssigned 
+      ? currentBar.schedule.filter(s => !(s.workerId === workerId && s.day === day && s.hour === hour))
+      : [...currentBar.schedule, { workerId, day, hour }];
     updateCurrentBar({ schedule: newSchedule });
   };
 
   const generateSchedule = async () => {
     if (!currentBar || currentBar.workers.length === 0) return;
+    
+    // Check for API Key selection
+    // @ts-ignore
+    if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+      // @ts-ignore
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        // @ts-ignore
+        await window.aistudio.openSelectKey();
+      }
+    }
+
     setIsGenerating(true);
+    setAiError(null);
+
     try {
       const scheduler = new GeminiScheduler();
       const newSchedule = await scheduler.generateSchedule(currentBar.workers, currentBar.requirements, currentBar.operatingHours);
       updateCurrentBar({ schedule: newSchedule });
       setActiveTab('schedule');
-    } catch (error) {
-      alert("AI failed to compile schedule. Ensure requirements and staff numbers are compatible.");
+    } catch (error: any) {
+      console.error("AI Generation Error Details:", error);
+      let title = "Generation Failed";
+      let message = error.message || "An unknown technical error occurred during AI processing.";
+      
+      if (message.includes("quota") || message.includes("429")) {
+        title = "Resource Quota Exceeded";
+        message = "Your API project has run out of credits or reached its daily request limit. Please check your billing at ai.google.dev or try switching to Gemini Flash.";
+      } else if (message.includes("entity was not found")) {
+        title = "API Connection Error";
+        message = "The selected API Key could not be found. Please try re-selecting your key in the API Studio dialog.";
+      }
+      
+      setAiError({ title, message: `${message}\n\nTechnical Trace: ${error.stack || 'No stack trace available'}` });
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const copyErrorToClipboard = () => {
+    if (aiError) {
+      navigator.clipboard.writeText(`Title: ${aiError.title}\nDetails: ${aiError.message}`);
     }
   };
 
@@ -239,85 +244,83 @@ const App: React.FC = () => {
     });
     const link = document.createElement("a");
     link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `${currentBar.name}_schedule.csv`);
+    link.setAttribute("download", `${currentBar.name.replace(/\s+/g, '_')}_schedule.csv`);
     link.click();
   };
 
-  if (!currentUser) {
-    return <Auth onLogin={handleLogin} />;
-  }
+  if (!currentUser) return <Auth onLogin={handleLogin} />;
 
   return (
     <>
       {!selectedBarId ? (
-        <Layout 
-          user={currentUser} 
-          onLogout={handleLogout} 
-          onEditProfile={() => setShowProfileModal(true)} 
-          activeTab="" 
-          setActiveTab={() => {}}
-        >
-          <BarManager 
-            bars={bars} 
-            onAddBar={handleAddBar} 
-            onUpdateBar={handleUpdateBar}
-            onSelectBar={setSelectedBarId} 
-            onDeleteBar={handleDeleteBar} 
-          />
+        <Layout user={currentUser} onLogout={handleLogout} onEditProfile={() => setShowProfileModal(true)} activeTab="" setActiveTab={() => {}}>
+          <BarManager bars={bars} onAddBar={handleAddBar} onUpdateBar={handleUpdateBar} onSelectBar={setSelectedBarId} onDeleteBar={handleDeleteBar} />
         </Layout>
       ) : (
-        <Layout 
-          user={currentUser} 
-          onLogout={handleLogout} 
-          onEditProfile={() => setShowProfileModal(true)} 
-          activeTab={activeTab} 
-          setActiveTab={setActiveTab} 
-          onBack={() => setSelectedBarId(null)} 
-          lastSaved={lastSaved}
-          barName={currentBar?.name}
-        >
+        <Layout user={currentUser} onLogout={handleLogout} onEditProfile={() => setShowProfileModal(true)} activeTab={activeTab} setActiveTab={setActiveTab} onBack={() => setSelectedBarId(null)} lastSaved={lastSaved} barName={currentBar?.name}>
           <div className="animate-in fade-in duration-500">
             {activeTab === 'workers' && (
-              <StaffList 
-                workers={currentBar.workers} 
-                onAddWorker={handleAddWorker} 
-                onUpdateWorker={handleUpdateWorker}
-                onRemoveWorker={handleRemoveWorker} 
-              />
+              <StaffList workers={currentBar.workers} onAddWorker={handleAddWorker} onUpdateWorker={handleUpdateWorker} onRemoveWorker={handleRemoveWorker} />
             )}
             {activeTab === 'requirements' && (
               <RequirementsGrid 
-                requirements={currentBar.requirements} 
-                workers={currentBar.workers}
-                onUpdateRequirement={handleUpdateRequirement} 
-                onUpdateRequirementsBulk={handleUpdateRequirementsBulk}
-                onToggleMandatoryWorker={handleToggleMandatoryWorker}
-                totalWorkers={currentBar.workers.length}
+                requirements={currentBar.requirements} workers={currentBar.workers}
+                onUpdateRequirement={handleUpdateRequirement} onUpdateRequirementsBulk={handleUpdateRequirementsBulk}
+                onToggleMandatoryWorker={handleToggleMandatoryWorker} totalWorkers={currentBar.workers.length}
                 operatingHours={currentBar.operatingHours}
               />
             )}
             {activeTab === 'schedule' && (
               <ScheduleView 
-                workers={currentBar.workers} 
-                requirements={currentBar.requirements} 
-                schedule={currentBar.schedule}
-                isGenerating={isGenerating}
-                onGenerate={generateSchedule}
-                onExport={exportToCSV}
-                operatingHours={currentBar.operatingHours}
-                onToggleEntry={handleToggleScheduleEntry}
+                workers={currentBar.workers} requirements={currentBar.requirements} schedule={currentBar.schedule}
+                isGenerating={isGenerating} onGenerate={generateSchedule} onExport={exportToCSV}
+                operatingHours={currentBar.operatingHours} onToggleEntry={handleToggleScheduleEntry}
               />
             )}
           </div>
         </Layout>
       )}
 
-      {showProfileModal && (
-        <ProfileModal 
-          user={currentUser} 
-          onClose={() => setShowProfileModal(false)}
-          onUpdate={handleUpdateUser}
-        />
+      {showProfileModal && <ProfileModal user={currentUser} onClose={() => setShowProfileModal(false)} onUpdate={handleUpdateUser} />}
+
+      {/* AI Error Diagnostic Modal */}
+      {aiError && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-red-100 overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="bg-red-500 p-8 text-white flex justify-between items-center">
+              <div className="flex items-center space-x-4">
+                <i className="fas fa-exclamation-triangle text-2xl"></i>
+                <h2 className="text-xl font-black uppercase tracking-widest">{aiError.title}</h2>
+              </div>
+              <button onClick={() => setAiError(null)} className="hover:bg-red-600 w-10 h-10 rounded-full flex items-center justify-center transition-all">
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="p-8">
+              <p className="text-slate-500 text-sm mb-4 font-bold uppercase tracking-wider">Diagnostic Information:</p>
+              <div className="bg-slate-900 rounded-2xl p-6 mb-6">
+                <pre className="text-amber-400 text-xs font-mono whitespace-pre-wrap break-all max-h-60 overflow-y-auto custom-scrollbar">
+                  {aiError.message}
+                </pre>
+              </div>
+              <div className="flex gap-4">
+                <button 
+                  onClick={copyErrorToClipboard}
+                  className="flex-1 bg-amber-500 text-slate-900 font-black py-4 rounded-2xl hover:bg-amber-400 transition-all flex items-center justify-center space-x-2 uppercase text-xs tracking-widest shadow-lg shadow-amber-500/10"
+                >
+                  <i className="fas fa-copy"></i>
+                  <span>Copy Technical Details</span>
+                </button>
+                <button 
+                  onClick={() => setAiError(null)}
+                  className="flex-1 bg-slate-100 text-slate-600 font-black py-4 rounded-2xl hover:bg-slate-200 transition-all uppercase text-xs tracking-widest"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
