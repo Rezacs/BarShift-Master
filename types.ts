@@ -27,6 +27,7 @@ export interface Worker {
   id: string;
   name: string;
   color: string; // Automatic unique color
+  priority: number; // Rank for desired hours (lower number = higher priority for hours)
   possibleStart: number;
   possibleEnd: number;
   preferredStart: number;
@@ -42,6 +43,7 @@ export interface StaffingRequirement {
   day: DayOfWeek;
   hour: number;
   neededCount: number;
+  mandatoryWorkerIds?: string[]; // Specifically requested workers for this slot
 }
 
 export interface ScheduleEntry {

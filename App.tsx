@@ -115,7 +115,11 @@ const App: React.FC = () => {
     if (!currentBar || !window.confirm("Delete this staff profile?")) return;
     updateCurrentBar({
       workers: currentBar.workers.filter(w => w.id !== id),
-      schedule: currentBar.schedule.filter(s => s.workerId !== id)
+      schedule: currentBar.schedule.filter(s => s.workerId !== id),
+      requirements: currentBar.requirements.map(r => ({
+        ...r,
+        mandatoryWorkerIds: r.mandatoryWorkerIds?.filter(mid => mid !== id) || []
+      }))
     });
   };
 
@@ -128,7 +132,7 @@ const App: React.FC = () => {
       if (existingIdx > -1) {
         newReqs = b.requirements.map((r, i) => i === existingIdx ? { ...r, neededCount: count } : r);
       } else {
-        newReqs = [...b.requirements, { day, hour, neededCount: count }];
+        newReqs = [...b.requirements, { day, hour, neededCount: count, mandatoryWorkerIds: [] }];
       }
       return { ...b, requirements: newReqs };
     }));
@@ -144,10 +148,51 @@ const App: React.FC = () => {
         if (existingIdx > -1) {
           newReqs[existingIdx] = { ...newReqs[existingIdx], neededCount: count };
         } else {
-          newReqs.push({ day, hour, neededCount: count });
+          newReqs.push({ day, hour, neededCount: count, mandatoryWorkerIds: [] });
         }
       });
       return { ...b, requirements: newReqs };
+    }));
+  };
+
+  const handleToggleMandatoryWorker = (day: DayOfWeek, hour: number, workerId: string) => {
+    if (!selectedBarId || !currentBar) return;
+    
+    setBars(prev => prev.map(b => {
+      if (b.id !== selectedBarId) return b;
+      
+      const reqIdx = b.requirements.findIndex(r => r.day === day && r.hour === hour);
+      let newReqs = [...b.requirements];
+      let newSchedule = [...b.schedule];
+      
+      if (reqIdx > -1) {
+        const req = newReqs[reqIdx];
+        const mandatoryIds = req.mandatoryWorkerIds || [];
+        const isAlreadyMandatory = mandatoryIds.includes(workerId);
+        
+        if (isAlreadyMandatory) {
+          // Remove from mandatory and from schedule
+          newReqs[reqIdx] = { ...req, mandatoryWorkerIds: mandatoryIds.filter(id => id !== workerId) };
+          newSchedule = newSchedule.filter(s => !(s.workerId === workerId && s.day === day && s.hour === hour));
+        } else {
+          // Add to mandatory and add to schedule
+          const updatedMandatory = [...mandatoryIds, workerId];
+          newReqs[reqIdx] = { 
+            ...req, 
+            mandatoryWorkerIds: updatedMandatory,
+            neededCount: Math.max(req.neededCount, updatedMandatory.length) // Auto-bump headcount if needed
+          };
+          if (!newSchedule.some(s => s.workerId === workerId && s.day === day && s.hour === hour)) {
+            newSchedule.push({ workerId, day, hour });
+          }
+        }
+      } else {
+        // Create new requirement with mandatory worker
+        newReqs.push({ day, hour, neededCount: 1, mandatoryWorkerIds: [workerId] });
+        newSchedule.push({ workerId, day, hour });
+      }
+      
+      return { ...b, requirements: newReqs, schedule: newSchedule };
     }));
   };
 
@@ -243,8 +288,10 @@ const App: React.FC = () => {
             {activeTab === 'requirements' && (
               <RequirementsGrid 
                 requirements={currentBar.requirements} 
+                workers={currentBar.workers}
                 onUpdateRequirement={handleUpdateRequirement} 
                 onUpdateRequirementsBulk={handleUpdateRequirementsBulk}
+                onToggleMandatoryWorker={handleToggleMandatoryWorker}
                 totalWorkers={currentBar.workers.length}
                 operatingHours={currentBar.operatingHours}
               />

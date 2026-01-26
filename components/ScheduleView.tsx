@@ -48,9 +48,8 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
       
       interval = window.setInterval(() => {
         setCurrentPhaseIdx(prev => Math.min(prev + 1, GENERATION_PHASES.length - 1));
-      }, 3500); // Change message every 3.5s
+      }, 3500); 
 
-      // Slower progress bar increments
       const progressInt = window.setInterval(() => {
         setDisplayProgress(prev => {
           if (prev < 98) return prev + (Math.random() * 2);
@@ -66,7 +65,6 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
   }, [isGenerating]);
 
   const getStaffForSlot = (day: DayOfWeek, hour: number) => {
-    // STABLE ORDERING: Sort workers alphabetically by name so they always appear in the same order
     return schedule
       .filter(s => s.day === day && s.hour === hour)
       .map(s => workers.find(w => w.id === s.workerId))
@@ -154,6 +152,63 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* AI Scheduling Logic Rules Section */}
+      {!isGenerating && (
+        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-4 animate-in fade-in slide-in-from-top-2 duration-500">
+          <div className="flex items-center gap-2">
+            <i className="fas fa-robot text-amber-500"></i>
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-900">Scheduling Intelligence & Rules</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-3 gap-x-6">
+            <div className="flex items-start gap-3">
+              <div className="w-5 h-5 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <i className="fas fa-clock text-[8px] text-amber-600"></i>
+              </div>
+              <p className="text-[10px] text-slate-500 font-bold leading-relaxed">
+                <span className="text-slate-900 uppercase tracking-tighter mr-1">8-Hour Daily Limit:</span>
+                Strict enforcement. No staff member will ever be scheduled for more than 8 hours in a single calendar day.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-5 h-5 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <i className="fas fa-scale-balanced text-[8px] text-blue-600"></i>
+              </div>
+              <p className="text-[10px] text-slate-500 font-bold leading-relaxed">
+                <span className="text-slate-900 uppercase tracking-tighter mr-1">Fair Distribution:</span>
+                The AI actively minimizes weekly hour variance, aiming for roughly equal workload across the entire team.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-5 h-5 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <i className="fas fa-arrows-up-down text-[8px] text-green-600"></i>
+              </div>
+              <p className="text-[10px] text-slate-500 font-bold leading-relaxed">
+                <span className="text-slate-900 uppercase tracking-tighter mr-1">Ranked Priority:</span>
+                Workers at the top of your ranking list get first choice on shifts while maintaining the overall equality goal.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-5 h-5 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <i className="fas fa-ban text-[8px] text-red-600"></i>
+              </div>
+              <p className="text-[10px] text-slate-500 font-bold leading-relaxed">
+                <span className="text-slate-900 uppercase tracking-tighter mr-1">Availability Honor:</span>
+                AI respects all "Unavailable Days" and individual "Global Availability" windows (Possible Start/End).
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-5 h-5 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <i className="fas fa-link text-[8px] text-purple-600"></i>
+              </div>
+              <p className="text-[10px] text-slate-500 font-bold leading-relaxed">
+                <span className="text-slate-900 uppercase tracking-tighter mr-1">Shift Continuity:</span>
+                The engine prefers solid blocks of working time over broken/split shifts to respect staff personal time.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isGenerating && (
         <div className="bg-white rounded-[2.5rem] border border-slate-100 p-12 text-center shadow-xl animate-in zoom-in-95 duration-500">

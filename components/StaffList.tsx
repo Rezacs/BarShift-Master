@@ -19,10 +19,11 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
   const [possibleEnd, setPossibleEnd] = useState(20);
   const [preferredStart, setPreferredStart] = useState(8);
   const [preferredEnd, setPreferredEnd] = useState(16);
-  const [preferredDaysCount, setPreferredDaysCount] = useState(5);
+  const [preferredDaysCount, setPreferredDaysCount] = useState<number | string>(0);
   const [preferredDays, setPreferredDays] = useState<DayOfWeek[]>([]);
   const [unavailableDays, setUnavailableDays] = useState<DayOfWeek[]>([]);
   const [isFlexible, setIsFlexible] = useState(false);
+  const [selectedColor, setSelectedColor] = useState('');
 
   const resetForm = () => {
     setName('');
@@ -30,10 +31,11 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
     setPossibleEnd(20);
     setPreferredStart(8);
     setPreferredEnd(16);
-    setPreferredDaysCount(5);
+    setPreferredDaysCount(0);
     setPreferredDays([]);
     setUnavailableDays([]);
     setIsFlexible(false);
+    setSelectedColor('');
     setEditingWorkerId(null);
     setShowForm(false);
   };
@@ -45,9 +47,10 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
     setPreferredStart(worker.preferredStart);
     setPreferredEnd(worker.preferredEnd);
     setPreferredDaysCount(worker.preferredDaysCount);
-    setPreferredDays(worker.preferredDays);
+    setPreferredDays(worker.preferredDays || []);
     setUnavailableDays(worker.unavailableDays || []);
     setIsFlexible(worker.isFlexible || false);
+    setSelectedColor(worker.color);
     setEditingWorkerId(worker.id);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -62,14 +65,15 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
     if (!name) return;
 
     let finalColor = '';
+    let priority = workers.length;
+
     if (editingWorkerId) {
       const existing = workers.find(w => w.id === editingWorkerId);
-      finalColor = existing ? existing.color : WORKER_COLORS[workers.length % WORKER_COLORS.length];
+      finalColor = selectedColor || (existing ? existing.color : WORKER_COLORS[workers.length % WORKER_COLORS.length]);
+      priority = existing ? existing.priority : workers.length;
     } else {
-      // Find the first color that isn't already used by the current team
       const usedColors = workers.map(w => w.color);
       const firstUnused = WORKER_COLORS.find(c => !usedColors.includes(c));
-      // Fallback to cycling through the palette if all colors are used
       finalColor = firstUnused || WORKER_COLORS[workers.length % WORKER_COLORS.length];
     }
 
@@ -77,11 +81,12 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
       id: editingWorkerId || crypto.randomUUID(),
       name,
       color: finalColor,
+      priority,
       possibleStart,
       possibleEnd,
       preferredStart: isFlexible ? possibleStart : Math.max(possibleStart, preferredStart),
       preferredEnd: isFlexible ? possibleEnd : Math.min(possibleEnd, preferredEnd),
-      preferredDaysCount: isFlexible ? 0 : preferredDaysCount,
+      preferredDaysCount: isFlexible ? 0 : Number(preferredDaysCount),
       preferredDays: isFlexible ? [] : preferredDays,
       unavailableDays,
       isFlexible,
@@ -96,22 +101,38 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
     resetForm();
   };
 
+  const handleMovePriority = (index: number, direction: 'up' | 'down') => {
+    const sorted = [...workers].sort((a, b) => (a.priority || 0) - (b.priority || 0));
+    const newIdx = direction === 'up' ? index - 1 : index + 1;
+    if (newIdx < 0 || newIdx >= sorted.length) return;
+
+    const tempPriority = sorted[index].priority;
+    sorted[index].priority = sorted[newIdx].priority;
+    sorted[newIdx].priority = tempPriority;
+
+    onUpdateWorker(sorted[index]);
+    onUpdateWorker(sorted[newIdx]);
+  };
+
+  const sortedWorkers = [...workers].sort((a, b) => (a.priority || 0) - (b.priority || 0));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-12 pb-12">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Team Roster</h2>
           <p className="text-gray-500">Manage availability and preferences</p>
         </div>
         <button
+          type="button"
           onClick={() => {
             if (showForm) resetForm();
             else setShowForm(true);
           }}
-          className="bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors flex items-center space-x-2"
+          className="bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors flex items-center space-x-2 shadow-sm"
         >
           <i className={`fas ${showForm ? 'fa-times' : 'fa-plus'}`}></i>
-          <span>{showForm ? 'Cancel' : 'Add Staff'}</span>
+          <span className="font-bold">{showForm ? 'Cancel' : 'Add Staff'}</span>
         </button>
       </div>
 
@@ -148,6 +169,23 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
                 required
               />
             </div>
+
+            {editingWorkerId && (
+              <div className="col-span-full bg-slate-50 p-5 rounded-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Update Worker Profile Color</label>
+                <div className="flex flex-wrap gap-2.5">
+                  {WORKER_COLORS.slice(0, 15).map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setSelectedColor(color)}
+                      className={`w-9 h-9 rounded-full border-4 transition-all hover:scale-110 shadow-sm ${selectedColor === color ? 'border-slate-900 scale-105' : 'border-transparent'}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
             
             <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
               <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Global Hours</h4>
@@ -193,7 +231,6 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
                     </button>
                   ))}
                 </div>
-                <p className="text-[9px] text-red-400 mt-2 leading-tight">AI will never schedule this worker on selected days.</p>
               </div>
             </div>
 
@@ -229,11 +266,12 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
                     <label className="block text-xs font-semibold text-blue-700 mb-1">Target Days Per Week</label>
                     <input 
                       type="number" 
-                      min="1" 
+                      min="0" 
                       max="7" 
                       value={preferredDaysCount} 
-                      onChange={(e) => setPreferredDaysCount(parseInt(e.target.value))} 
+                      onChange={(e) => setPreferredDaysCount(e.target.value)} 
                       className="w-full px-3 py-1.5 border border-blue-200 rounded-md text-sm bg-white"
+                      placeholder="0"
                     />
                   </div>
                   <div>
@@ -281,7 +319,7 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center space-x-3">
                 <div 
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold border text-white transition-colors`}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold border text-white transition-colors shadow-sm`}
                   style={{ backgroundColor: worker.color, borderColor: 'rgba(0,0,0,0.1)' }}
                 >
                   {worker.name.charAt(0).toUpperCase()}
@@ -293,74 +331,83 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
                   ) : (
                     <div className="flex items-center space-x-1 text-[10px] text-blue-600 font-bold uppercase tracking-tight">
                       <i className="fas fa-calendar-day"></i>
-                      <span>{worker.preferredDaysCount} days/wk target</span>
+                      <span>{worker.preferredDaysCount > 0 ? `${worker.preferredDaysCount} days/wk target` : 'No weekly target'}</span>
                     </div>
                   )}
                 </div>
               </div>
-              <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex space-x-1">
                 <button 
+                  type="button"
                   onClick={() => handleEditClick(worker)} 
                   className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"
+                  title="Edit Staff"
                 >
                   <i className="fas fa-edit"></i>
                 </button>
                 <button 
+                  type="button"
                   onClick={() => onRemoveWorker(worker.id)} 
                   className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                  title="Delete Staff"
                 >
                   <i className="fas fa-trash-alt"></i>
                 </button>
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="grid grid-cols-2 gap-2">
                 <div className="text-[10px] bg-gray-50 p-2 rounded border border-gray-100">
-                  <span className="block text-gray-400 font-bold uppercase mb-1">Available Hours</span>
-                  <span className="text-gray-700 font-medium">{formatHour(worker.possibleStart)} - {formatHour(worker.possibleEnd)}</span>
+                  <span className="block text-gray-400 font-bold uppercase mb-1">Global Avail.</span>
+                  <span className="text-gray-700 font-bold">{formatHour(worker.possibleStart)} - {formatHour(worker.possibleEnd)}</span>
                 </div>
                 {!worker.isFlexible && (
                   <div className="text-[10px] bg-amber-50 p-2 rounded border border-amber-100">
-                    <span className="block text-amber-400 font-bold uppercase mb-1">Preferred Hours</span>
-                    <span className="text-amber-700 font-medium">{formatHour(worker.preferredStart)} - {formatHour(worker.preferredEnd)}</span>
+                    <span className="block text-amber-400 font-bold uppercase mb-1">Pref. Hours</span>
+                    <span className="text-amber-700 font-bold">{formatHour(worker.preferredStart)} - {formatHour(worker.preferredEnd)}</span>
                   </div>
                 )}
                 {worker.isFlexible && (
-                  <div className="text-[10px] bg-slate-50 p-2 rounded border border-slate-100 flex items-center justify-center italic text-slate-400">
-                    No Preferences
+                  <div className="text-[10px] bg-slate-50 p-2 rounded border border-slate-100 flex items-center justify-center italic text-slate-400 font-bold">
+                    Backup Mode
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="pt-1">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Unavailable Days</span>
-                  <div className="mt-1 flex flex-wrap gap-1">
+              {/* Day Constraints Display */}
+              <div className="space-y-3 pt-2 border-t border-gray-50">
+                <div>
+                  <h4 className="text-[9px] font-black text-red-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                    <i className="fas fa-ban"></i> Cannot Work
+                  </h4>
+                  <div className="flex flex-wrap gap-1">
                     {worker.unavailableDays && worker.unavailableDays.length > 0 ? (
                       worker.unavailableDays.map(day => (
-                        <span key={day} className="px-2 py-0.5 bg-red-50 text-red-600 text-[9px] font-bold rounded-full border border-red-100">
+                        <span key={day} className="px-1.5 py-0.5 bg-red-50 text-red-600 text-[8px] font-black rounded border border-red-100 uppercase">
                           {day.substring(0, 3)}
                         </span>
                       ))
                     ) : (
-                      <span className="text-[9px] text-gray-400 italic">Fully available</span>
+                      <span className="text-[9px] text-gray-300 italic font-medium">None restricted</span>
                     )}
                   </div>
                 </div>
 
                 {!worker.isFlexible && (
-                  <div className="pt-1">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Preferred Days</span>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {worker.preferredDays.length > 0 ? (
+                  <div>
+                    <h4 className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                      <i className="fas fa-star"></i> Preferred Days
+                    </h4>
+                    <div className="flex flex-wrap gap-1">
+                      {worker.preferredDays && worker.preferredDays.length > 0 ? (
                         worker.preferredDays.map(day => (
-                          <span key={day} className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-bold rounded-full border border-blue-100">
+                          <span key={day} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black rounded border border-blue-100 uppercase">
                             {day.substring(0, 3)}
                           </span>
                         ))
                       ) : (
-                        <span className="text-[9px] text-gray-400 italic">Any day of week</span>
+                        <span className="text-[9px] text-gray-300 italic font-medium">No preferred days</span>
                       )}
                     </div>
                   </div>
@@ -376,6 +423,75 @@ const StaffList: React.FC<StaffListProps> = ({ workers, onAddWorker, onUpdateWor
           </div>
         )}
       </div>
+
+      {workers.length > 0 && (
+        <div className="mt-8 bg-white p-8 rounded-3xl shadow-xl border border-gray-100 animate-in fade-in slide-in-from-bottom-6 duration-700">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">Staff Hour Priority Ranking</h3>
+              <p className="text-slate-500 text-sm mt-1">Reorder workers to set their desired workload. Workers at the top are prioritized for more hours.</p>
+            </div>
+            <div className="bg-amber-100 text-amber-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm">
+              AI Scheduling Weight
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {sortedWorkers.map((worker, index) => (
+              <div 
+                key={worker.id} 
+                className="flex items-center gap-6 p-5 rounded-2xl bg-slate-50 border border-slate-100 transition-all hover:bg-slate-100 group shadow-sm"
+              >
+                <div className="w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow-inner border border-slate-200">
+                  <span className="text-slate-400 font-black text-sm">#{index + 1}</span>
+                </div>
+                
+                <div 
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white shadow-md border border-white/20"
+                  style={{ backgroundColor: worker.color }}
+                >
+                  {worker.name.charAt(0).toUpperCase()}
+                </div>
+                
+                <div className="flex-1">
+                  <span className="text-base font-black text-slate-900">{worker.name}</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                      {worker.isFlexible ? 'Flexible/Backup' : 'Core Staff'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button"
+                    disabled={index === 0}
+                    onClick={() => handleMovePriority(index, 'up')}
+                    className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-amber-500 hover:border-amber-500/50 transition-all flex items-center justify-center disabled:opacity-20"
+                  >
+                    <i className="fas fa-chevron-up text-xs"></i>
+                  </button>
+                  <button 
+                    type="button"
+                    disabled={index === sortedWorkers.length - 1}
+                    onClick={() => handleMovePriority(index, 'down')}
+                    className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-amber-500 hover:border-amber-500/50 transition-all flex items-center justify-center disabled:opacity-20"
+                  >
+                    <i className="fas fa-chevron-down text-xs"></i>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 flex items-center space-x-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <i className="fas fa-info-circle text-slate-400"></i>
+            <p className="text-[10px] text-slate-500 font-medium italic">
+              The priority order above directly informs the AI during schedule generation. It will attempt to give more hours to top-ranked workers before utilizing those further down the list.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
